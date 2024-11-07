@@ -905,7 +905,6 @@ const AiConsultChannelPage = () => {
     },
     [dispatch, src, isErrorOccurred]
   );
-  );
 
   const handleRecordingStart = () => {
     console.log("녹음 시작");
