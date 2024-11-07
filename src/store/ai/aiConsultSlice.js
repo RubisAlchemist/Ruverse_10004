@@ -4,32 +4,32 @@ import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 const initialState = {
   audio: {
     sonny: {
-      defaultSrc: "https://ruverse-test.com/video/default_sonny.mp4",
-      greetingsSrc: "https://ruverse-test.com/video/greetings_sonny.webm",
-      errorSrc: "https://ruverse-test.com/video/pardon_sonny.webm",
-      noteSrc: "https://ruverse-test.com/video/note_sonny.mp4",
-      existingSrc: "https://ruverse-test.com/video/regreetings_sonny.webm",
+      defaultSrc: "https://ruverse-10003.com/video/default_sonny.mp4",
+      greetingsSrc: "https://ruverse-10003.com/video/greetings_sonny.webm",
+      errorSrc: "https://ruverse-10003.com/video/pardon_sonny.webm",
+      noteSrc: "https://ruverse-10003.com/video/note_sonny.mp4",
+      existingSrc: "https://ruverse-10003.com/video/regreetings_sonny.webm",
     },
     karina: {
-      defaultSrc: "https://ruverse-test.com/video/default_karina.mp4",
-      greetingsSrc: "https://ruverse-test.com/video/greetings_karina.webm",
-      errorSrc: "https://ruverse-test.com/video/pardon_karina.webm",
-      noteSrc: "https://ruverse-test.com/video/note_karina.mp4",
-      existingSrc: "https://ruverse-test.com/video/regreetings_karina.webm",
+      defaultSrc: "https://ruverse-10003.com/video/default_karina.mp4",
+      greetingsSrc: "https://ruverse-10003.com/video/greetings_karina.webm",
+      errorSrc: "https://ruverse-10003.com/video/pardon_karina.webm",
+      noteSrc: "https://ruverse-10003.com/video/note_karina.mp4",
+      existingSrc: "https://ruverse-10003.com/video/regreetings_karina.webm",
     },
     chloe: {
-      defaultSrc: "https://ruverse-test.com/video/default_chloe.mp4",
-      greetingsSrc: "https://ruverse-test.com/video/greetings_chloe.webm",
-      errorSrc: "https://ruverse-test.com/video/pardon_chloe.webm",
-      noteSrc: "https://ruverse-test.com/video/note_chloe.mp4",
-      existingSrc: "https://ruverse-test.com/video/regreetings_chloe.webm",
+      defaultSrc: "https://ruverse-10003.com/video/default_chloe.mp4",
+      greetingsSrc: "https://ruverse-10003.com/video/greetings_chloe.webm",
+      errorSrc: "https://ruverse-10003.com/video/pardon_chloe.webm",
+      noteSrc: "https://ruverse-10003.com/video/note_chloe.mp4",
+      existingSrc: "https://ruverse-10003.com/video/regreetings_chloe.webm",
     },
     dohyung: {
-      defaultSrc: "https://ruverse-test.com/video/default_dohyung.mp4",
-      greetingsSrc: "https://ruverse-test.com/video/greetings_dohyung.webm",
-      errorSrc: "https://ruverse-test.com/video/pardon_dohyung.webm",
-      noteSrc: "https://ruverse-test.com/video/note_dohyung.mp4",
-      existingSrc: "https://ruverse-test.com/video/regreetings_dohyung.webm",
+      defaultSrc: "https://ruverse-10003.com/video/default_dohyung.mp4",
+      greetingsSrc: "https://ruverse-10003.com/video/greetings_dohyung.webm",
+      errorSrc: "https://ruverse-10003.com/video/pardon_dohyung.webm",
+      noteSrc: "https://ruverse-10003.com/video/note_dohyung.mp4",
+      existingSrc: "https://ruverse-10003.com/video/regreetings_dohyung.webm",
     },
     isNotePlaying: false,
     isGreetingsPlaying: true,
@@ -143,9 +143,11 @@ export const aiConsultSlice = createSlice({
     },
     setAudioErrorOccurred: (state) => {
       state.audio.isErrorOccurred = true;
+      state.audio.src = "error"; // src를 'error'로 설정
     },
     clearAudioErrorOccurred: (state) => {
       state.audio.isErrorOccurred = false;
+      state.audio.src = "";
     },
     resetState: () => initialState,
   },
