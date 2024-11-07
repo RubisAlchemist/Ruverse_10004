@@ -631,6 +631,7 @@ import {
   setNotePlaying,
   clearNotePlaying,
   setAudioErrorOccurred,
+  resetState,
 } from "@store/ai/aiConsultSlice";
 import { useDispatch, useSelector } from "react-redux";
 import { useParams, useLocation, useNavigate } from "react-router-dom";
@@ -767,6 +768,10 @@ const AiConsultChannelPage = () => {
       // 팝업 확인 후 아무 동작도 하지 않음 (새로고침 방지)
     });
   }, []);
+
+  useEffect(() => {
+    dispatch(resetState());
+  }, [dispatch]);
 
   useEffect(() => {
     const handleKeyPress = (e) => {
@@ -1108,7 +1113,7 @@ const AiConsultChannelPage = () => {
             bgcolor="transparent"
             zIndex={4}
           >
-            <CircularProgress />
+            {/* <CircularProgress /> */}
           </Box>
         )}
 

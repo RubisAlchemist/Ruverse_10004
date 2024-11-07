@@ -147,6 +147,7 @@ export const aiConsultSlice = createSlice({
     clearAudioErrorOccurred: (state) => {
       state.audio.isErrorOccurred = false;
     },
+    resetState: () => initialState,
   },
   extraReducers: (builder) => {
     builder.addCase(uploadRequest.pending, (state) => {
@@ -202,6 +203,7 @@ export const {
   clearErrorPlaying, // New action
   setAudioErrorOccurred, // 추가된 액션
   clearAudioErrorOccurred, // 추가된 액션
+  resetState,
 } = aiConsultSlice.actions;
 
 export default aiConsultSlice.reducer;
