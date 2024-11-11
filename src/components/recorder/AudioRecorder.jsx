@@ -453,6 +453,9 @@ const AudioRecorder = ({
   // 추가된 부분: stream을 참조하기 위한 ref 생성
   const streamRef = useRef(null);
 
+  // 현재 사용 중인 오디오 입력 장치 ID를 저장하기 위한 ref
+  const currentDeviceIdRef = useRef(null);
+
   const getRecordingStatusMessage = () => {
     if (!isRecordingAllowed) return "";
     return "상담사에게 말씀해주세요";
@@ -463,60 +466,120 @@ const AudioRecorder = ({
     let analyser = null;
     let dataArray = null;
 
-    const initializeMedia = () => {
+    // 사용 가능한 오디오 입력 장치 목록을 가져와 현재 활성화된 장치를 선택
+    const getAvailableAudioInputDevices = async () => {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const audioInputDevices = devices.filter(
+          (device) => device.kind === "audioinput"
+        );
+        return audioInputDevices;
+      } catch (err) {
+        console.error("Error enumerating devices:", err);
+        setError("장치 목록을 가져오는 중 에러가 발생했습니다.");
+        return [];
+      }
+    };
+
+    // 우선순위에 따라 오디오 입력 장치를 선택 (예: 기본 장치 사용)
+    const selectAudioInputDevice = (devices) => {
+      if (devices.length === 0) {
+        setError("오디오 입력 장치를 찾을 수 없습니다.");
+        return null;
+      }
+      // 예를 들어, 첫 번째 장치를 선택. 필요에 따라 다른 로직 적용 가능
+      return devices[0].deviceId;
+    };
+
+    const initializeMedia = async () => {
       if (!isComponentMounted) return;
       if (!window.AudioContext && !window.webkitAudioContext) {
         console.error("This browser does not support Web Audio API.");
         setError("Your browser does not support Web Audio API.");
         return;
       }
-      navigator.mediaDevices
-        .getUserMedia({ audio: true })
-        .then((mediaStream) => {
-          if (!isComponentMounted) return;
-          streamRef.current = mediaStream;
 
-          streamRef.current.getTracks().forEach((track) => {
-            track.onended = () => {
-              console.log("Microphone input device changed or disconnected");
-              cleanupMedia();
-              initializeMedia();
-            };
-          });
+      const audioInputDevices = await getAvailableAudioInputDevices();
+      const selectedDeviceId = selectAudioInputDevice(audioInputDevices);
 
-          audioContextRef.current = new (window.AudioContext ||
-            window.webkitAudioContext)();
-          const sourceNode = audioContextRef.current.createMediaStreamSource(
-            streamRef.current
-          );
-          analyser = audioContextRef.current.createAnalyser();
-          analyser.fftSize = 512;
-          sourceNode.connect(analyser);
-          dataArray = new Uint8Array(analyser.fftSize);
-          mediaRecorderRef.current = new MediaRecorder(streamRef.current, {
-            mimeType: "audio/webm",
-          });
-          mediaRecorderRef.current.ondataavailable = (event) => {
-            chunksRef.current.push(event.data);
-          };
-          mediaRecorderRef.current.onstop = handleRecordingStop;
-          detectVoice();
-        })
-        .catch((err) => {
-          console.error("Microphone access error:", err);
-          setError(
-            "마이크 접근 권한이 필요합니다. 설정에서 마이크 권한을 허용해주세요."
-          );
-          alert(
-            "마이크 접근 권한이 필요합니다. 설정에서 마이크 권한을 허용해주세요."
-          );
+      if (!selectedDeviceId) {
+        dispatch(setAudioErrorOccurred());
+        return;
+      }
+
+      currentDeviceIdRef.current = selectedDeviceId;
+
+      const constraints = {
+        audio: {
+          deviceId: { exact: selectedDeviceId },
+        },
+      };
+
+      try {
+        const mediaStream = await navigator.mediaDevices.getUserMedia(
+          constraints
+        );
+        if (!isComponentMounted) return;
+        streamRef.current = mediaStream;
+
+        // 기존 트랙 종료 핸들러 제거 (중복 호출 방지)
+        streamRef.current.getTracks().forEach((track) => {
+          track.onended = null;
         });
+
+        // 새로 연결된 장치의 트랙 종료 시 핸들러 설정
+        streamRef.current.getTracks().forEach((track) => {
+          track.onended = () => {
+            console.log("Microphone input device changed or disconnected");
+            cleanupMedia();
+            initializeMedia();
+          };
+        });
+
+        audioContextRef.current = new (window.AudioContext ||
+          window.webkitAudioContext)();
+        const sourceNode = audioContextRef.current.createMediaStreamSource(
+          streamRef.current
+        );
+        analyser = audioContextRef.current.createAnalyser();
+        analyser.fftSize = 512;
+        sourceNode.connect(analyser);
+        dataArray = new Uint8Array(analyser.fftSize);
+        mediaRecorderRef.current = new MediaRecorder(streamRef.current, {
+          mimeType: "audio/webm",
+        });
+        mediaRecorderRef.current.ondataavailable = (event) => {
+          chunksRef.current.push(event.data);
+        };
+        mediaRecorderRef.current.onstop = handleRecordingStop;
+        detectVoice();
+      } catch (err) {
+        console.error("Microphone access error:", err);
+        setError(
+          "마이크 접근 권한이 필요합니다. 설정에서 마이크 권한을 허용해주세요."
+        );
+        alert(
+          "마이크 접근 권한이 필요합니다. 설정에서 마이크 권한을 허용해주세요."
+        );
+        dispatch(setAudioErrorOccurred());
+      }
     };
 
-    const handleDeviceChange = () => {
+    const handleDeviceChange = async () => {
       console.log("Media devices changed");
-      cleanupMedia();
-      initializeMedia();
+      // 현재 사용 중인 장치가 여전히 존재하는지 확인
+      const audioInputDevices = await getAvailableAudioInputDevices();
+      const isCurrentDeviceAvailable = audioInputDevices.some(
+        (device) => device.deviceId === currentDeviceIdRef.current
+      );
+
+      if (!isCurrentDeviceAvailable) {
+        console.log("Current audio input device is no longer available.");
+        cleanupMedia();
+        initializeMedia();
+      } else {
+        console.log("Current audio input device is still available.");
+      }
     };
 
     navigator.mediaDevices.addEventListener("devicechange", handleDeviceChange);
@@ -555,6 +618,11 @@ const AudioRecorder = ({
     };
 
     const detectVoice = () => {
+      if (!analyser || !dataArray) {
+        console.error("Analyser or dataArray is not initialized.");
+        return;
+      }
+
       try {
         analyser.getByteTimeDomainData(dataArray);
         let sum = 0;
@@ -566,6 +634,7 @@ const AudioRecorder = ({
         const currentVolume = rms / 128;
         setVolume(currentVolume);
         const threshold = 0.05;
+
         if (!isRecordingAllowed) {
           if (isRecordingRef.current) {
             stopRecording();
@@ -574,6 +643,7 @@ const AudioRecorder = ({
           animationIdRef.current = requestAnimationFrame(detectVoice);
           return;
         }
+
         if (currentVolume > threshold) {
           if (voiceStopTimerRef.current) {
             clearTimeout(voiceStopTimerRef.current);
@@ -623,6 +693,7 @@ const AudioRecorder = ({
     if (!isRecordingAllowed && isRecordingRef.current) {
       stopRecording();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isRecordingAllowed]);
 
   const startRecording = () => {
