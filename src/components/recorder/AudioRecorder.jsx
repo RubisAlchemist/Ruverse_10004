@@ -386,7 +386,6 @@
 //   isRecordingAllowed: PropTypes.bool.isRequired,
 // };
 // export default AudioRecorder;
-
 import { useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
@@ -394,8 +393,10 @@ import {
   uploadRequest,
   setNotePlaying,
   setAudioErrorOccurred,
+  clearAudioErrorOccurred,
 } from "@store/ai/aiConsultSlice";
 import PropTypes from "prop-types";
+// Import MUI components and icons
 import { makeStyles } from "@mui/styles";
 import GraphicEqIcon from "@mui/icons-material/GraphicEq";
 import MicOffIcon from "@mui/icons-material/MicOff";
@@ -448,6 +449,8 @@ const AudioRecorder = ({
   const [volume, setVolume] = useState(0);
   const [error, setError] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
+  const [selectedDeviceId, setSelectedDeviceId] = useState(null);
+
   const getRecordingStatusMessage = () => {
     if (!isRecordingAllowed) return "";
     return "상담사에게 말씀해주세요";
@@ -468,9 +471,13 @@ const AudioRecorder = ({
             (device) => device.kind === "audioinput"
           );
           if (audioInputs.length > 0) {
+            // 새로운 오디오 입력 장치가 있는 경우, 첫 번째 장치로 스트림 재설정
+            const newDevice = audioInputs[0];
+            setSelectedDeviceId(newDevice.deviceId);
             cleanupMedia();
-            initializeMedia();
+            initializeMedia(newDevice.deviceId);
           } else {
+            // 사용 가능한 오디오 입력 장치가 없으면 에러 상태 설정
             console.log("No available audio input devices.");
             dispatch(setAudioErrorOccurred());
           }
@@ -481,38 +488,28 @@ const AudioRecorder = ({
         });
     };
 
-    const initializeMedia = () => {
+    const initializeMedia = (deviceId = null) => {
       if (!isComponentMounted) return;
       if (!window.AudioContext && !window.webkitAudioContext) {
         console.error("This browser does not support Web Audio API.");
         setError("Your browser does not support Web Audio API.");
         return;
       }
+
+      const constraints = deviceId
+        ? { audio: { deviceId: { exact: deviceId } } }
+        : { audio: true };
+
       navigator.mediaDevices
-        .getUserMedia({ audio: true })
+        .getUserMedia(constraints)
         .then((mediaStream) => {
           if (!isComponentMounted) return;
           stream = mediaStream;
           stream.getTracks().forEach((track) => {
             track.onended = () => {
-              console.log("Microphone input device changed or disconnected");
-              navigator.mediaDevices
-                .enumerateDevices()
-                .then((devices) => {
-                  const audioInputs = devices.filter(
-                    (device) => device.kind === "audioinput"
-                  );
-                  if (audioInputs.length > 0) {
-                    cleanupMedia();
-                    initializeMedia();
-                  } else {
-                    dispatch(setAudioErrorOccurred());
-                  }
-                })
-                .catch((err) => {
-                  console.error("Error enumerating devices:", err);
-                  dispatch(setAudioErrorOccurred());
-                });
+              console.log("Microphone input device ended");
+              // 장치 변경 시 handleDeviceChange를 호출하여 재연결 시도
+              handleDeviceChange();
             };
           });
           audioContextRef.current = new (window.AudioContext ||
@@ -530,6 +527,7 @@ const AudioRecorder = ({
             chunksRef.current.push(event.data);
           };
           mediaRecorderRef.current.onstop = handleRecordingStop;
+          dispatch(clearAudioErrorOccurred()); // 에러 상태 초기화
           detectVoice();
         })
         .catch((err) => {
@@ -540,6 +538,7 @@ const AudioRecorder = ({
           alert(
             "Microphone access is required. Please allow microphone permissions in your settings."
           );
+          dispatch(setAudioErrorOccurred());
         });
     };
 
@@ -625,14 +624,15 @@ const AudioRecorder = ({
         // Reinitialize media on error
         if (isComponentMounted) {
           cleanupMedia();
-          initializeMedia();
+          initializeMedia(selectedDeviceId);
         }
       }
     };
 
+    // Initialize media with the first available device
     initializeMedia();
 
-    // devicechange 이벤트 리스너 추가
+    // Add devicechange event listener
     navigator.mediaDevices.addEventListener("devicechange", handleDeviceChange);
 
     return () => {
@@ -643,7 +643,7 @@ const AudioRecorder = ({
         handleDeviceChange
       );
     };
-  }, [isRecordingAllowed, dispatch]);
+  }, [isRecordingAllowed, dispatch, selectedDeviceId]);
 
   useEffect(() => {
     if (!isRecordingAllowed && isRecordingRef.current) {
