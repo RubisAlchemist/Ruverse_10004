@@ -386,6 +386,7 @@
 //   isRecordingAllowed: PropTypes.bool.isRequired,
 // };
 // export default AudioRecorder;
+
 import { useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
@@ -393,7 +394,6 @@ import {
   uploadRequest,
   setNotePlaying,
   setAudioErrorOccurred,
-  clearAudioErrorOccurred,
 } from "@store/ai/aiConsultSlice";
 import PropTypes from "prop-types";
 // Import MUI components and icons
@@ -449,7 +449,9 @@ const AudioRecorder = ({
   const [volume, setVolume] = useState(0);
   const [error, setError] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
-  const [selectedDeviceId, setSelectedDeviceId] = useState(null);
+
+  // 추가된 부분: stream을 참조하기 위한 ref 생성
+  const streamRef = useRef(null);
 
   const getRecordingStatusMessage = () => {
     if (!isRecordingAllowed) return "";
@@ -460,87 +462,64 @@ const AudioRecorder = ({
     let isComponentMounted = true;
     let analyser = null;
     let dataArray = null;
-    let stream = null;
 
-    const handleDeviceChange = () => {
-      console.log("Media devices changed");
-      navigator.mediaDevices
-        .enumerateDevices()
-        .then((devices) => {
-          const audioInputs = devices.filter(
-            (device) => device.kind === "audioinput"
-          );
-          if (audioInputs.length > 0) {
-            // 새로운 오디오 입력 장치가 있는 경우, 첫 번째 장치로 스트림 재설정
-            const newDevice = audioInputs[0];
-            setSelectedDeviceId(newDevice.deviceId);
-            cleanupMedia();
-            initializeMedia(newDevice.deviceId);
-          } else {
-            // 사용 가능한 오디오 입력 장치가 없으면 에러 상태 설정
-            console.log("No available audio input devices.");
-            dispatch(setAudioErrorOccurred());
-          }
-        })
-        .catch((err) => {
-          console.error("Error enumerating devices:", err);
-          dispatch(setAudioErrorOccurred());
-        });
-    };
-
-    const initializeMedia = (deviceId = null) => {
+    const initializeMedia = () => {
       if (!isComponentMounted) return;
       if (!window.AudioContext && !window.webkitAudioContext) {
         console.error("This browser does not support Web Audio API.");
         setError("Your browser does not support Web Audio API.");
         return;
       }
-
-      const constraints = deviceId
-        ? { audio: { deviceId: { exact: deviceId } } }
-        : { audio: true };
-
       navigator.mediaDevices
-        .getUserMedia(constraints)
+        .getUserMedia({ audio: true })
         .then((mediaStream) => {
           if (!isComponentMounted) return;
-          stream = mediaStream;
-          stream.getTracks().forEach((track) => {
+          streamRef.current = mediaStream;
+
+          streamRef.current.getTracks().forEach((track) => {
             track.onended = () => {
-              console.log("Microphone input device ended");
-              // 장치 변경 시 handleDeviceChange를 호출하여 재연결 시도
-              handleDeviceChange();
+              console.log("Microphone input device changed or disconnected");
+              cleanupMedia();
+              initializeMedia();
             };
           });
+
           audioContextRef.current = new (window.AudioContext ||
             window.webkitAudioContext)();
-          const sourceNode =
-            audioContextRef.current.createMediaStreamSource(stream);
+          const sourceNode = audioContextRef.current.createMediaStreamSource(
+            streamRef.current
+          );
           analyser = audioContextRef.current.createAnalyser();
           analyser.fftSize = 512;
           sourceNode.connect(analyser);
           dataArray = new Uint8Array(analyser.fftSize);
-          mediaRecorderRef.current = new MediaRecorder(stream, {
+          mediaRecorderRef.current = new MediaRecorder(streamRef.current, {
             mimeType: "audio/webm",
           });
           mediaRecorderRef.current.ondataavailable = (event) => {
             chunksRef.current.push(event.data);
           };
           mediaRecorderRef.current.onstop = handleRecordingStop;
-          dispatch(clearAudioErrorOccurred()); // 에러 상태 초기화
           detectVoice();
         })
         .catch((err) => {
           console.error("Microphone access error:", err);
           setError(
-            "Microphone access is required. Please allow microphone permissions in your settings."
+            "마이크 접근 권한이 필요합니다. 설정에서 마이크 권한을 허용해주세요."
           );
           alert(
-            "Microphone access is required. Please allow microphone permissions in your settings."
+            "마이크 접근 권한이 필요합니다. 설정에서 마이크 권한을 허용해주세요."
           );
-          dispatch(setAudioErrorOccurred());
         });
     };
+
+    const handleDeviceChange = () => {
+      console.log("Media devices changed");
+      cleanupMedia();
+      initializeMedia();
+    };
+
+    navigator.mediaDevices.addEventListener("devicechange", handleDeviceChange);
 
     const cleanupMedia = () => {
       if (animationIdRef.current) {
@@ -565,11 +544,11 @@ const AudioRecorder = ({
         mediaRecorderRef.current.stop();
         mediaRecorderRef.current = null;
       }
-      if (stream) {
-        stream.getTracks().forEach((track) => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => {
           track.stop();
         });
-        stream = null;
+        streamRef.current = null;
       }
       isRecordingRef.current = false;
       setIsRecording(false);
@@ -621,29 +600,24 @@ const AudioRecorder = ({
         animationIdRef.current = requestAnimationFrame(detectVoice);
       } catch (error) {
         console.error("Error in detectVoice:", error);
-        // Reinitialize media on error
         if (isComponentMounted) {
           cleanupMedia();
-          initializeMedia(selectedDeviceId);
+          initializeMedia();
         }
       }
     };
 
-    // Initialize media with the first available device
     initializeMedia();
-
-    // Add devicechange event listener
-    navigator.mediaDevices.addEventListener("devicechange", handleDeviceChange);
 
     return () => {
       isComponentMounted = false;
-      cleanupMedia();
       navigator.mediaDevices.removeEventListener(
         "devicechange",
         handleDeviceChange
       );
+      cleanupMedia();
     };
-  }, [isRecordingAllowed, dispatch, selectedDeviceId]);
+  }, [isRecordingAllowed, dispatch]);
 
   useEffect(() => {
     if (!isRecordingAllowed && isRecordingRef.current) {
