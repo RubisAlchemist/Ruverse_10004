@@ -811,12 +811,16 @@ const AiConsultChannelPage = () => {
         } else {
           console.warn("선택된 인사말 비디오 소스가 없습니다.");
         }
-      } else if (src === "error" || isErrorOccurred) {
-        console.log("에러 비디오 재생");
-        setOverlayVideo(errorSrc);
-        setIsSeamlessPlaying(false);
-        setErrorSrcPlayCount((prevCount) => prevCount + 1); // 에러 카운트 증가
-        console.log(errorSrcPlayCount);
+      } else if ((src === "error" || isErrorOccurred) && !overlayVideo) {
+        // 에러 비디오가 이미 설정되어 있는지 확인
+        if (overlayVideo !== errorSrc) {
+          // 에러 비디오가 이미 설정되어 있지 않다면
+          console.log("error 비디오 재생");
+          setOverlayVideo(errorSrc);
+          setIsSeamlessPlaying(false);
+          setErrorSrcPlayCount((prevCount) => prevCount + 1);
+          console.log(errorSrcPlayCount);
+        }
       } else if (isNotePlaying && noteSrc) {
         console.log("노트 비디오 재생");
         setOverlayVideo(noteSrc);
@@ -927,6 +931,12 @@ const AiConsultChannelPage = () => {
     },
     [dispatch, src, isErrorOccurred]
   );
+
+  const handleErrorVideoError = useCallback((e) => {
+    console.error("에러 비디오 재생 오류:", e);
+    // 에러 비디오에서도 추가적인 에러 처리가 필요하다면 여기에 작성
+    // 예: 사용자에게 재시도 옵션 제공 등
+  }, []);
 
   const handleRecordingStart = () => {
     console.log("녹음 시작");
@@ -1102,7 +1112,11 @@ const AiConsultChannelPage = () => {
               src={overlayVideo}
               autoPlay
               onEnded={handleOverlayVideoEnd}
-              onError={handleGreetingsVideoError}
+              onError={
+                src === "error"
+                  ? handleErrorVideoError
+                  : handleGreetingsVideoError
+              }
               onPause={handleVideoPause}
               onPlay={handleVideoPlay}
               zIndex={2}
