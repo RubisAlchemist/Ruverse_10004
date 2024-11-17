@@ -493,7 +493,7 @@ const AudioRecorder = ({
   const voiceStartTimerRef = useRef(null);
   const voiceStopTimerRef = useRef(null);
   const VOICE_START_DEBOUNCE = 50;
-  const VOICE_STOP_DEBOUNCE = 1700;
+  const VOICE_STOP_DEBOUNCE = 2500;
   const isUploadingRef = useRef(false);
   const [volume, setVolume] = useState(0);
   const [error, setError] = useState(null);
@@ -777,7 +777,8 @@ const AudioRecorder = ({
       console.log("devicechange 이벤트 리스너 제거");
       cleanupMedia();
     };
-  }, [isRecordingAllowed, dispatch, handleAudioError]);
+    // }, [isRecordingAllowed, dispatch, handleAudioError]);
+  }, [isRecordingAllowed, dispatch]);
 
   useEffect(() => {
     if (!isRecordingAllowed && isRecordingRef.current) {
@@ -852,7 +853,7 @@ const AudioRecorder = ({
     selectedAvatar,
     current,
     onRecordingStop,
-    handleAudioError,
+    // handleAudioError,
   ]);
 
   return (
