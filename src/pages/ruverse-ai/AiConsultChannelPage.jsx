@@ -56,6 +56,7 @@
 //   const [showInstruction, setShowInstruction] = useState(true);
 //   const [isSeamlessLoading, setIsSeamlessLoading] = useState(false);
 //   const [timestampsArray, setTimestampsArray] = useState([]);
+//   const [errorSrcPlayCount, setErrorSrcPlayCount] = useState(0);
 
 //   const greetingsVideoRef = useRef(null);
 //   const seamlessVideoRef = useRef(null);
@@ -128,7 +129,8 @@
 //       }).then((result) => {
 //         if (result.isConfirmed) {
 //           window.open(
-//             "https://docs.google.com/forms/d/e/1FAIpQLScdd0osi9M_RWAnjnCEjaku49Cee7jMhkIpZF9VnUBfzQy2ZQ/viewform"
+//             //"https://docs.google.com/forms/d/e/1FAIpQLScdd0osi9M_RWAnjnCEjaku49Cee7jMhkIpZF9VnUBfzQy2ZQ/viewform"
+//             "https://forms.gle/Wm3uUVLrKvHJKWby6"
 //           );
 //           handleEndConsultation();
 //         } else if (result.isDismissed) {
@@ -199,14 +201,16 @@
 //         console.log("에러 비디오 재생");
 //         setOverlayVideo(errorSrc);
 //         setIsSeamlessPlaying(false);
+//         setErrorSrcPlayCount((prevCount) => prevCount + 1); // 에러 카운트 증가
+//         console.log(errorSrcPlayCount);
 //       } else if (isNotePlaying && noteSrc) {
 //         console.log("노트 비디오 재생");
 //         setOverlayVideo(noteSrc);
 //       }
 //     }
-
 //     if (src && !isSeamlessPlaying && src !== "error") {
 //       console.log("시작하기 seamless 비디오 재생");
+//       setErrorSrcPlayCount(0); // 에러 카운트 리셋
 //       setIsSeamlessPlaying(true);
 //       setIsLoading(true);
 //     }
@@ -236,10 +240,34 @@
 //       console.log("에러 비디오 재생 종료");
 //       dispatch(clearAudioSrc()); // src를 초기화하여 에러 비디오가 다시 재생되지 않도록 함
 //       dispatch(clearAudioErrorOccurred()); // isErrorOccurred 초기화
+//       if (errorSrcPlayCount >= 3) {
+//         // 알림 표시 및 홈으로 이동
+//         MySwal.fire({
+//           title: "알림",
+//           // text: `일시적인 네트워크 사정으로 인해
+//           // 서비스 이용이 원활하지 않습니다.
+//           // 02-880-2562로 전화주시길 바랍니다.`,
+//           html: `<strong>일시적인 네트워크 사정으로 인해</strong><br><strong>서비스 이용이 원활하지 않습니다.</strong><br><strong>02-880-2562로 전화주시길 바랍니다.</strong>`,
+//           icon: "info",
+//           confirmButtonText: "확인",
+//           allowOutsideClick: false,
+//         }).then(() => {
+//           navigate("/", { replace: true });
+//           window.location.reload();
+//         });
+//         return; // 이후 코드를 실행하지 않도록 반환
+//       }
 //     }
 //     setOverlayVideo(null);
 //     setIsAnswerButtonEnabled(true);
-//   }, [dispatch, isGreetingsPlaying, isNotePlaying, src]);
+//   }, [
+//     dispatch,
+//     isGreetingsPlaying,
+//     isNotePlaying,
+//     src,
+//     errorSrcPlayCount,
+//     navigate,
+//   ]);
 
 //   // seamless 비디오 핸들러들
 //   const handleSeamlessVideoEnd = useCallback(() => {
@@ -409,7 +437,7 @@
 //   }, [isVideoPausedBySystem, overlayVideo]);
 
 //   return (
-//     <Box width="100%" height="100vh">
+//     <Box width="100%" height="100vh" sx={{ overflow: "hidden" }}>
 //       <Box width="100%" height="90%" position="relative">
 //         {/* 배경 이미지 */}
 //         <Box
@@ -421,7 +449,7 @@
 //           zIndex={0}
 //           sx={{
 //             backgroundImage: `url(${BackgroundImage})`,
-//             backgroundSize: "cover",
+//             backgroundSize: "contain",
 //             backgroundPosition: "center",
 //             backgroundRepeat: "no-repeat",
 //             display: { xs: "none", md: "block" },
@@ -442,7 +470,7 @@
 //           muted
 //           zIndex={1}
 //           sx={{
-//             objectFit: "cover",
+//             objectFit: "contain",
 //           }}
 //         />
 
@@ -465,7 +493,7 @@
 //               onPlay={handleVideoPlay}
 //               zIndex={2}
 //               sx={{
-//                 objectFit: "cover",
+//                 objectFit: "contain",
 //               }}
 //             />
 //           </Fade>
@@ -480,6 +508,9 @@
 //             width="100%"
 //             height="100%"
 //             zIndex={3}
+//             sx={{
+//               objectFit: "contain",
+//             }}
 //           >
 //             <SeamlessVideoPlayer
 //               ref={seamlessVideoRef}
@@ -627,10 +658,10 @@ import {
   setGreetingsPlayed,
   setNotePlaying,
   clearNotePlaying,
-  setErrorPlaying, // New action
-  clearErrorPlaying, // New action
-  setAudioErrorOccurred, // 추가된 액션
-  clearAudioErrorOccurred, // 추가된 액션
+  setErrorPlaying,
+  clearErrorPlaying,
+  setAudioErrorOccurred,
+  clearAudioErrorOccurred,
   resetState,
 } from "@store/ai/aiConsultSlice";
 import { useDispatch, useSelector } from "react-redux";
@@ -665,6 +696,7 @@ const AiConsultChannelPage = () => {
 
   // 상태 변수들
   const [overlayVideo, setOverlayVideo] = useState(null);
+  const [isOverlayVideoLoading, setIsOverlayVideoLoading] = useState(false); // 추가된 상태 변수
   const [isSeamlessPlaying, setIsSeamlessPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isAnswerButtonEnabled, setIsAnswerButtonEnabled] = useState(true);
@@ -672,15 +704,21 @@ const AiConsultChannelPage = () => {
   const [isSeamlessLoading, setIsSeamlessLoading] = useState(false);
   const [timestampsArray, setTimestampsArray] = useState([]);
   const [errorSrcPlayCount, setErrorSrcPlayCount] = useState(0);
+  const [isTransitioning, setIsTransitioning] = useState(false); // 추가된 상태 변수
 
   const greetingsVideoRef = useRef(null);
   const seamlessVideoRef = useRef(null);
+  const userInitiatedPause = useRef(false);
   const isRecordingAllowed =
-    overlayVideo === null && !isSeamlessPlaying && !isLoading;
+    overlayVideo === null &&
+    !isOverlayVideoLoading &&
+    !isSeamlessPlaying &&
+    !isLoading &&
+    !isTransitioning;
 
   // State variables to track video pause due to AirPod removal
   const [isVideoPausedBySystem, setIsVideoPausedBySystem] = useState(false);
-  const userInitiatedPause = useRef(false);
+
   const isErrorOccurred = useSelector(
     (state) => state.aiConsult.audio.isErrorOccurred
   );
@@ -793,7 +831,7 @@ const AiConsultChannelPage = () => {
 
   // 상태 변화에 따른 비디오 재생 로직
   useEffect(() => {
-    if (!overlayVideo) {
+    if (!overlayVideo && !isTransitioning) {
       if (isGreetingsPlaying) {
         // Determine which source to use based on sessionStatus
         console.log("sessionStatus: ", sessionStatus);
@@ -808,6 +846,7 @@ const AiConsultChannelPage = () => {
               : "greetingsSrc 사용"
           );
           setOverlayVideo(selectedGreetingsSrc);
+          setIsOverlayVideoLoading(true); // 오버레이 비디오 로딩 시작
           setIsSeamlessPlaying(false);
         } else {
           console.warn("선택된 인사말 비디오 소스가 없습니다.");
@@ -815,12 +854,14 @@ const AiConsultChannelPage = () => {
       } else if (src === "error" || isErrorOccurred) {
         console.log("에러 비디오 재생");
         setOverlayVideo(errorSrc);
+        setIsOverlayVideoLoading(true); // 오버레이 비디오 로딩 시작
         setIsSeamlessPlaying(false);
         setErrorSrcPlayCount((prevCount) => prevCount + 1); // 에러 카운트 증가
         console.log(errorSrcPlayCount);
       } else if (isNotePlaying && noteSrc) {
         console.log("노트 비디오 재생");
         setOverlayVideo(noteSrc);
+        setIsOverlayVideoLoading(true); // 오버레이 비디오 로딩 시작
       }
     }
     if (src && !isSeamlessPlaying && src !== "error") {
@@ -842,11 +883,13 @@ const AiConsultChannelPage = () => {
     dispatch,
     sessionStatus,
     isErrorOccurred,
+    isTransitioning,
   ]);
 
   // overlay 비디오 종료 핸들러
   const handleOverlayVideoEnd = useCallback(() => {
     console.log("Overlay 비디오 종료");
+    setIsTransitioning(true); // 전환 시작
     if (isGreetingsPlaying) {
       dispatch(setGreetingsPlayed());
     } else if (isNotePlaying) {
@@ -859,9 +902,6 @@ const AiConsultChannelPage = () => {
         // 알림 표시 및 홈으로 이동
         MySwal.fire({
           title: "알림",
-          // text: `일시적인 네트워크 사정으로 인해
-          // 서비스 이용이 원활하지 않습니다.
-          // 02-880-2562로 전화주시길 바랍니다.`,
           html: `<strong>일시적인 네트워크 사정으로 인해</strong><br><strong>서비스 이용이 원활하지 않습니다.</strong><br><strong>02-880-2562로 전화주시길 바랍니다.</strong>`,
           icon: "info",
           confirmButtonText: "확인",
@@ -874,7 +914,9 @@ const AiConsultChannelPage = () => {
       }
     }
     setOverlayVideo(null);
+    setIsOverlayVideoLoading(false); // 오버레이 비디오 로딩 종료
     setIsAnswerButtonEnabled(true);
+    setIsTransitioning(false); // 전환 종료
   }, [
     dispatch,
     isGreetingsPlaying,
@@ -883,6 +925,12 @@ const AiConsultChannelPage = () => {
     errorSrcPlayCount,
     navigate,
   ]);
+
+  // overlay 비디오 로드 완료 핸들러
+  const handleOverlayVideoLoaded = useCallback(() => {
+    console.log("Overlay 비디오 로드 완료");
+    setIsOverlayVideoLoading(false);
+  }, []);
 
   // seamless 비디오 핸들러들
   const handleSeamlessVideoEnd = useCallback(() => {
@@ -1051,6 +1099,31 @@ const AiConsultChannelPage = () => {
     };
   }, [isVideoPausedBySystem, overlayVideo]);
 
+  // 디버깅을 위한 상태 변화 로그 추가
+  useEffect(() => {
+    console.log("isRecordingAllowed:", isRecordingAllowed);
+  }, [isRecordingAllowed]);
+
+  useEffect(() => {
+    console.log("overlayVideo:", overlayVideo);
+  }, [overlayVideo]);
+
+  useEffect(() => {
+    console.log("isSeamlessPlaying:", isSeamlessPlaying);
+  }, [isSeamlessPlaying]);
+
+  useEffect(() => {
+    console.log("isLoading:", isLoading);
+  }, [isLoading]);
+
+  useEffect(() => {
+    console.log("isOverlayVideoLoading:", isOverlayVideoLoading);
+  }, [isOverlayVideoLoading]);
+
+  useEffect(() => {
+    console.log("isTransitioning:", isTransitioning);
+  }, [isTransitioning]);
+
   return (
     <Box width="100%" height="100vh" sx={{ overflow: "hidden" }}>
       <Box width="100%" height="90%" position="relative">
@@ -1102,6 +1175,7 @@ const AiConsultChannelPage = () => {
               ref={greetingsVideoRef}
               src={overlayVideo}
               autoPlay
+              onLoadedData={handleOverlayVideoLoaded} // 오버레이 비디오 로드 완료 핸들러 추가
               onEnded={handleOverlayVideoEnd}
               onError={handleGreetingsVideoError}
               onPause={handleVideoPause}
@@ -1193,7 +1267,6 @@ const AiConsultChannelPage = () => {
         height="8%"
         borderTop={1}
         borderColor={"#ccc"}
-        //sx={{ minHeight: "150px" }} // 최소 높이 설정
       >
         {/* 오디오 레코더 */}
         <AudioRecorder
