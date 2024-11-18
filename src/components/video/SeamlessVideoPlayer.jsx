@@ -116,7 +116,7 @@ const SeamlessVideoPlayer = forwardRef((props, ref) => {
           }
         }
         await sleep(RETRY_DELAY);
-        // Continue loop to retry
+        // Continue loop to retry !
         if (retryCounts.current[index] >= 61 && onError) {
           onError(error);
           return;
