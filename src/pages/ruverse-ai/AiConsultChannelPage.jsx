@@ -1052,7 +1052,7 @@ const AiConsultChannelPage = () => {
   }, [isVideoPausedBySystem, overlayVideo]);
 
   return (
-    <Box width="100%" height="100vh">
+    <Box width="100%" height="100vh" sx={{ overflow: "hidden" }}>
       <Box width="100%" height="90%" position="relative">
         {/* 배경 이미지 */}
         <Box
