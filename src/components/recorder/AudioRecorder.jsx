@@ -448,6 +448,9 @@ import GraphicEqIcon from "@mui/icons-material/GraphicEq";
 import MicOffIcon from "@mui/icons-material/MicOff";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
+import Swal from "sweetalert2";
+import { useNavigate } from "react-router-dom";
+import scheduleData from "@assets/scheduleData.json";
 
 const useStyles = makeStyles({
   icon: {
@@ -498,6 +501,7 @@ const AudioRecorder = ({
   const [volume, setVolume] = useState(0);
   const [error, setError] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
+  const navigate = useNavigate();
 
   // 추가된 부분: stream을 참조하기 위한 ref 생성
   const streamRef = useRef(null);
@@ -505,6 +509,10 @@ const AudioRecorder = ({
   // 현재 사용 중인 오디오 입력 장치 ID를 저장하기 위한 ref
   const currentDeviceIdRef = useRef(null);
 
+  // URL 쿼리 파라미터에서 uname과 phoneNumber 가져오기
+  const queryParams = new URLSearchParams(location.search);
+  const unameParam = queryParams.get("uname") || "";
+  const phoneNumberParam = queryParams.get("phoneNumber") || "";
   // 에러 핸들러 함수 추가
   // const handleAudioError = useCallback(
   //   (errorMessage) => {
@@ -523,6 +531,83 @@ const AudioRecorder = ({
   const getRecordingStatusMessage = () => {
     if (!isRecordingAllowed) return "";
     return "상담사에게 말씀해주세요";
+  };
+
+  // 예약 확인 함수
+  const checkUserReservation = (uname, phoneNumber) => {
+    const lastFourDigits = phoneNumber.slice(-4);
+
+    // "admin" 계정 특별 처리
+    if (uname === "admin") {
+      return {
+        success: true,
+      };
+    }
+
+    // 현재 날짜와 시간 가져오기
+    const now = new Date();
+    const month = now.getMonth() + 1;
+    const date = now.getDate();
+    const formattedDate = `${month}월 ${date}일`; // 예: "10월 5일"
+
+    const currentTimeSlot = getCurrentTimeSlot(now);
+
+    console.log("now: ", now);
+    console.log("month: ", month);
+    console.log("date: ", date);
+    console.log("formattedDate: ", formattedDate);
+    console.log("currentTimeSlot: ", currentTimeSlot);
+
+    if (!currentTimeSlot) {
+      return {
+        success: false,
+        message: "현재 상담 가능한 시간이 아닙니다.",
+      };
+    }
+
+    const entries = scheduleData[formattedDate]?.[currentTimeSlot];
+    console.log("entries: ", entries);
+
+    if (!entries || entries.length === 0) {
+      console.log("현재 시간대에 예약된 상담이 없습니다.");
+      return {
+        success: false,
+        message: "예약하신 상담시간이 종료되었습니다.",
+      };
+    }
+
+    // 사용자 정보와 일치하는 예약이 있는지 확인
+    let userEntryFound = false;
+
+    for (let entry of entries) {
+      // entry를 쉼표로 분리하여 개별 엔트리로 분할
+      const individualEntries = entry.split(",").map((e) => e.trim());
+      for (let individualEntry of individualEntries) {
+        const match = individualEntry.match(/(.+)\((\d+)\)/);
+        if (match) {
+          const [_, name, phone] = match;
+          console.log(`예약된 이름: ${name}, 예약된 번호: ${phone}`);
+          if (name === uname && phone === lastFourDigits) {
+            userEntryFound = true;
+            break;
+          }
+        }
+      }
+      if (userEntryFound) {
+        break;
+      }
+    }
+
+    if (!userEntryFound) {
+      return {
+        success: false,
+        message: "예약하신 상담 시간이 종료되었습니다.",
+      };
+    }
+
+    return {
+      success: true,
+    };
   };
 
   useEffect(() => {
@@ -815,7 +900,58 @@ const AudioRecorder = ({
     }
   };
 
-  const handleRecordingStop = useCallback(() => {
+  const getCurrentTimeSlot = (now) => {
+    const hours = now.getHours();
+    const minutes = now.getMinutes();
+    const currentTotalMinutes = hours * 60 + minutes;
+
+    // 시간 슬롯 목록 생성
+    const timeSlots = [];
+    for (let h = 0; h <= 23; h++) {
+      const startHour = h;
+      const endHour = h + 1;
+      const slot = `${startHour.toString().padStart(2, "0")}:00~${endHour
+        .toString()
+        .padStart(2, "0")}:00`;
+      timeSlots.push(slot);
+    }
+
+    // 현재 시간에 해당하는 시간 슬롯 찾기
+    for (let slot of timeSlots) {
+      const [startTime, endTime] = slot.split("~");
+      const [startHour, startMinute] = startTime.split(":").map(Number);
+      const [endHour, endMinute] = endTime.split(":").map(Number);
+
+      const slotStartMinutes = startHour * 60 + startMinute;
+      const slotEndMinutes = endHour * 60 + endMinute;
+
+      if (
+        currentTotalMinutes >= slotStartMinutes &&
+        currentTotalMinutes < slotEndMinutes
+      ) {
+        return slot;
+      }
+    }
+
+    // 해당하는 시간 슬롯이 없을 경우 null 반환
+    return null;
+  };
+
+  const handleRecordingStop = useCallback(async () => {
+    //사용자가 예약된 상담 시간에 있는지 확인
+    const reservationResult = checkUserReservation(uname, phoneNumber);
+    if (!reservationResult.success) {
+      await Swal.fire({
+        title: "안내",
+        text: reservationResult.message,
+        icon: "info",
+        confirmButtonText: "확인",
+      });
+      navigate("/");
+      window.location.reload();
+      return;
+    }
+
     if (isUploadingRef.current) {
       console.warn("Already uploading. Not starting a new upload.");
       return;
@@ -854,6 +990,7 @@ const AudioRecorder = ({
     current,
     onRecordingStop,
     // handleAudioError,
+    navigate,
   ]);
 
   return (
